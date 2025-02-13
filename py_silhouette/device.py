@@ -493,7 +493,86 @@ class SilhouetteDevice(object):
             mm2mu(clamp(y, 0, self.params.area_height_max)),
             mm2mu(clamp(x, 0, self.params.area_width_max)),
         ))
-    
+
+    def circle(self,x0,y0,r1,r2,t1=0,t2=1,d=None):
+        """
+        Tested on Silhouette Cameo 4
+        For accurate description, please refer to the following link:
+        https://github.com/fablabnbg/inkscape-silhouette/blob/main/Commands.md
+        Even better (page 17): 
+        https://github.com/Snow4DV/graphtec-gp-gl-manual/raw/main/Manual.pdf
+
+        Draws a circle (but not only, see above)
+
+        Circle mode:
+        x0,y0 are circle's center coordinates (mm)
+        r1,r2 are half radius expressed in mm. Form regular circle, enter r1=r2
+        t1,t2 starting and ending radius. The drawing is counterclockwise when t1<t2 and clockwise when t1>t2
+        d: leave blank/None
+
+        Example:
+        d.circle(100,100,50,50) will draw a circle centered on point (10,10) with a radius of 5cm
+        d.circle(100,100,50,50,0,0.5) will draw half of the previous circle
+        d.circle(100,100,50,50,0.5,1.5) will draw the first circle twice starting at the top
+
+        Polygone:
+        d<0: gives the number of segments of the circle (d = -6 divides circle into 6)
+        Example:
+        d.circle(100,100,50,50,0,1,-6) will draw a hexagone
+
+        d>0: subtends the given angle with segments of the circle
+        Example:
+        d.circle(100,100,50,50,0,1,1/8) will draw an octogone
+        
+        Note 1: you don't need to manage the tool's position (up/down), the plotter will move to to the begining of the shape tool up, then will execute the plot.
+        Note 2: it is possible to draw/plot a spiral, it will be implemented in a separate function
+        Note 3: might as well build a separate function for polygones
+        
+        """
+        s_command=b"W%d,%d,%d,%d,%d,%d%s\x03"%(
+                mm2mu(x0),
+                mm2mu(y0),
+                mm2mu(r1),
+                mm2mu(r2),
+                int(t1*3600),
+                int(t2*3600),
+                b","+str(d).encode("utf_8") if d else b""
+            )
+        self._send(s_command)
+
+    def curve(self,l_points,a=False):
+        """
+        Tested on Silhouette Cameo 4
+        For accurate description, please refer to the following link:
+        https://github.com/fablabnbg/inkscape-silhouette/blob/main/Commands.md
+        Even better (page 21): 
+        https://github.com/Snow4DV/graphtec-gp-gl-manual/raw/main/Manual.pdf
+
+        Draws a smooth cubic curve through points
+
+        Parameters
+        ----------
+        l_points:   the list of points the curve goes through. Each point should be either a list of coordinates or a complex number. See example bellow.
+                    Make sure you have at least 3 points.
+        a:          False if open curve, True if closed curve. If True, no need to specify the start point again at the end
+
+        Example:
+        d.curve([complex(50,50),[70,60],[110,40],complex(130,50)])
+        
+        Note 1: you don't need to manage the tool's position (up/down), the plotter will move to to the begining of the shape tool up, then will execute the plot.
+        Note 2: make sure there are no duplicate, adjascent points in l_points
+        """
+        s_command=b""
+        if len(l_points)>2:
+            s_command="Y"+str(1 if a else 0)
+            for this_point in l_points:
+                if type(this_point) == complex:
+                    s_command+=","+str(mm2mu(this_point.imag))+","+str(mm2mu(this_point.real))
+                elif type(this_point)==list:
+                    s_command+=","+str(mm2mu(this_point[0]))+","+str(mm2mu(this_point[1]))
+            s_command+="\x03"
+        self._send(s_command.encode("utf_8"))
+
     def set_tool_diameter(self, diameter):
         r"""
         Inform the plotter of the diameter of a swivelling tool's working
